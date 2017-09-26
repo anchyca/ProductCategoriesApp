@@ -1,0 +1,44 @@
+﻿@model IEnumerable<ProductCatalogueApp.Models.Category>
+@{
+    ViewData["Title"] = "Categories";
+}
+<h2>Index</h2>
+@if (User.Identity.IsAuthenticated)
+{
+    if (User.IsInRole("Admin"))
+    {
+        <p>
+            <a asp-action="Create">Nova kategorija</a>
+        </p>
+    }
+}
+<table class="table">
+    <thead>
+        <tr>
+            <th>
+                @Html.DisplayNameFor(model => model.Name)
+            </th>
+            <th></th>
+        </tr>
+    </thead>
+    <tbody>
+        @foreach (var item in Model)
+        {
+            <tr>
+                <td>
+                    @Html.DisplayFor(modelItem => item.Name)
+                </td>
+                <td>
+                    @if (User.Identity.IsAuthenticated)
+                    {
+                        if (User.IsInRole("Admin"))
+                        {
+                            <a asp-action="Edit" asp-route-id="@item.ID">Uredi</a> <text>|</text>
+                        }
+                    }
+                    <a asp-action="Details" asp-route-id="@item.ID">Detalji</a>
+                </td>
+            </tr>
+        }
+    </tbody>
+</table>

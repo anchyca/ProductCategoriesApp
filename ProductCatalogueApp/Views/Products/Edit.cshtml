@@ -1,0 +1,69 @@
+﻿@model  ProductCatalogueApp.Models.ProductViewModels.ProductCategoriesViewModel
+@{
+    ViewData["Title"] = "Edit";
+}
+
+<h2>Edit</h2>
+
+<h4>Product</h4>
+<hr />
+<div class="row">
+    <div class="col-md-4">
+        <form asp-action="Edit">
+            <div asp-validation-summary="ModelOnly" class="text-danger"></div>
+            <input type="hidden" asp-for="ProductID" />
+            <div class="form-group">
+                <label asp-for="SKU" class="control-label"></label>
+                <input asp-for="SKU" class="form-control" />
+                <span asp-validation-for="SKU" class="text-danger"></span>
+            </div>
+            <div class="form-group">
+                <label asp-for="Name" class="control-label"></label>
+                <input asp-for="Name" class="form-control" />
+                <span asp-validation-for="Name" class="text-danger"></span>
+            </div>
+            <div class="form-group">
+                <label asp-for="Image" class="control-label"></label>
+                <img src="@Model.ImagePath" height="200" width="500"/>
+                <input type="file" name="file" />
+                <span asp-validation-for="Image" class="text-danger"></span>
+            </div>
+            <div class="form-group">
+                <div class="col-md-offset-1 col-md-10">
+                    <table>
+                        <tr>
+                            @{
+                                int cnt = 0;
+                                foreach (var category in Model.Categories)
+                                {
+                                    if (cnt++ % 3 == 0)
+                                    {
+                                        @:</tr><tr>
+                                        }
+                                    @:<td>
+                                        <input type="checkbox"
+                                               name="selectedCategories"
+                                               value="@category.CategoryID"
+                                               @(Html.Raw(category.Assigned ? "checked=\"checked\"" : "")) />
+                                                @category.CategoryID @:  @category.CategoryName
+                                                @:</td>
+                                    }
+                                @:</tr>
+                            }
+                        </table>
+                    </div>
+                </div>
+            <div class="form-group">
+                <input type="submit" value="Spremi" class="btn btn-default" />
+            </div>
+        </form>
+    </div>
+</div>
+
+<div>
+    <a asp-action="Index">Natrag na listu</a>
+</div>
+
+@section Scripts {
+    @{await Html.RenderPartialAsync("_ValidationScriptsPartial");}
+}
