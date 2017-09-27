@@ -9,6 +9,7 @@ using ProductCatalogueApp.Data;
 using ProductCatalogueApp.Models;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Configuration;
 
 namespace ProductCatalogueApp.Controllers
 {
@@ -16,11 +17,13 @@ namespace ProductCatalogueApp.Controllers
     {
         private readonly ApplicationDbContext _context;
         private readonly ILogger _logger;
+        private readonly IConfiguration _configuration;
 
-        public CategoriesController(ApplicationDbContext context, ILogger<CategoriesController> logger)
+        public CategoriesController(ApplicationDbContext context, ILogger<CategoriesController> logger, IConfiguration configuration)
         {
             _context = context;
             _logger = logger;
+            _configuration = configuration;
         }
 
         // GET: Categories
@@ -37,7 +40,7 @@ namespace ProductCatalogueApp.Controllers
             }
         }
 
-        public async Task<IActionResult> Index(string currentFilter, string searchString, int? page)
+        public async Task<JsonResult> GetCategoriesBySearch(string currentFilter, string searchString, int? page)
         {
             try
             {
@@ -60,13 +63,23 @@ namespace ProductCatalogueApp.Controllers
                         .Where(x => x.Name.Contains(searchString));
                 }
 
-                int pageSize = 3;
-                return View(await PaginatedList<Category>.CreateAsync(categories.AsNoTracking(), page ?? 1, pageSize));
+                int pageSize = _configuration.GetValue<int>("CategoriesPageSize");
+
+                return new JsonResult(new
+                {
+                    categories = await PaginatedList<Category>.CreateAsync(categories.AsNoTracking(), page ?? 1, pageSize),
+                    hasErrors = false,
+                    errorMessage = ""
+                });
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, message: "Greška prilikom dohvata kategorija.");
-                return View("Error");
+                return new JsonResult(new
+                {
+                    hasErrors = true,
+                    errorMessage = "Greška prilikom dohvata kategorija."
+                });
             }
         }
 

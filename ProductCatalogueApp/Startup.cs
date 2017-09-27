@@ -66,6 +66,7 @@ namespace ProductCatalogueApp
             });
 
             // Add application services.
+            services.AddSingleton<IConfiguration>(Configuration);
             services.AddTransient<IEmailSender, EmailSender>();
             services.AddOptions();
             services.Configure<AzureStorageConfig>(Configuration.GetSection("AzureStorageConfig"));

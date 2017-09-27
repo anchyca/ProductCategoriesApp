@@ -14,6 +14,7 @@ using Microsoft.Extensions.Options;
 using Microsoft.WindowsAzure.Storage.Auth;
 using Microsoft.Extensions.Logging;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.Extensions.Configuration;
 
 namespace ProductCatalogueApp.Controllers
 {
@@ -22,12 +23,14 @@ namespace ProductCatalogueApp.Controllers
         private readonly ApplicationDbContext _context;
         private readonly AzureStorageConfig storageConfig;
         private readonly ILogger _logger;
+        private readonly IConfiguration _configuration;
 
-        public ProductsController(ApplicationDbContext context, IOptions<AzureStorageConfig> config, ILogger<ProductsController> logger)
+        public ProductsController(ApplicationDbContext context, IOptions<AzureStorageConfig> config, ILogger<ProductsController> logger, IConfiguration configuration)
         {
             _context = context;
             storageConfig = config.Value;
             this._logger = logger;
+            _configuration = configuration;
         }
 
         // GET: Products
@@ -35,36 +38,8 @@ namespace ProductCatalogueApp.Controllers
         {
             try
             {
-                ViewData["CurrentFilter"] = searchString;
-
-                _logger.LogInformation("In index");
-
-                var products = _context.Product
-                        .Include(x => x.Categories)
-                        .ThenInclude(x => x.Category).Where(x => x.IsActive == true);
-
-                if (searchString != null)
-                {
-                    page = 1;
-                }
-                else
-                {
-                    searchString = currentFilter;
-                }
-
-                if (!string.IsNullOrEmpty(searchString))
-                {
-                    var productIds = await _context.Category
-                                        .Include(x => x.Products)
-                                        .Where(x => x.Name.Contains(searchString))
-                                        .SelectMany(x => x.Products.Select(y => y.ProductId))
-                                        .ToListAsync();
-                    products = products
-                        .Where(x => x.IsActive == true &&
-                                (x.SKU.Contains(searchString) || x.Name.Contains(searchString) || productIds.Contains(x.ID)));
-                }
-
-                int pageSize = 3;
+                var products = await GetProducts(searchString, page, currentFilter);
+                int pageSize = _configuration.GetValue<int>("ProductsPageSize");
                 return View(await PaginatedList<Product>.CreateAsync(products.AsNoTracking(), page ?? 1, pageSize));
             }
             catch (Exception ex)
@@ -74,7 +49,31 @@ namespace ProductCatalogueApp.Controllers
             }
         }
 
-        public async Task<IActionResult> GetProductByCategory(int categoryId)
+        public async Task<JsonResult> GetAllProducts(string currentFilter, string searchString, int? page)
+        {
+            try
+            {
+                var products = await GetProducts(searchString, page, currentFilter);
+
+                return new JsonResult(new
+                {
+                    products = products,
+                    hasErrors = false,
+                    errorMessage = ""
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, message: "Greška prilikom dohvaćanja produkata.");
+                return new JsonResult(new
+                {
+                    hasErrors = true,
+                    errorMessage = "Greška prilikom dohvaćanja produkata."
+                });
+            }
+        }
+
+        public async Task<JsonResult> GetProductByCategory(int categoryId)
         {
             try
             {
@@ -82,12 +81,21 @@ namespace ProductCatalogueApp.Controllers
                                 .Include(x => x.Categories)
                                     .ThenInclude(x => x.Category)
                                 .Where(x => x.Categories.Select(y => y.CategoryId).Contains(categoryId)).ToListAsync();
-                return View(products);
+                return new JsonResult(new
+                {
+                    products = products,
+                    hasErrors = false,
+                    errorMessage = ""
+                });
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, message: "Greška prilikom dohvaćanja produkata prema ID-u kategorije");
-                return View("Error");
+                return new JsonResult(new
+                {
+                    hasErrors = true,
+                    errorMessage = "Greška prilikom dohvaćanja produkata prema ID-u kategorije"
+                });
             }
         }
 
@@ -440,5 +448,38 @@ namespace ProductCatalogueApp.Controllers
             return blockBlob.Uri.ToString();
         }
 
+        private async Task<IQueryable<Product>> GetProducts(string searchString, int? page, string currentFilter)
+        {
+            ViewData["CurrentFilter"] = searchString;
+
+            _logger.LogInformation("In index");
+
+            var products = _context.Product
+                    .Include(x => x.Categories)
+                    .ThenInclude(x => x.Category).Where(x => x.IsActive == true);
+
+            if (searchString != null)
+            {
+                page = 1;
+            }
+            else
+            {
+                searchString = currentFilter;
+            }
+
+            if (!string.IsNullOrEmpty(searchString))
+            {
+                var productIds = await _context.Category
+                                    .Include(x => x.Products)
+                                    .Where(x => x.Name.Contains(searchString))
+                                    .SelectMany(x => x.Products.Select(y => y.ProductId))
+                                    .ToListAsync();
+                products = products
+                    .Where(x => x.IsActive == true &&
+                            (x.SKU.Contains(searchString) || x.Name.Contains(searchString) || productIds.Contains(x.ID)));
+            }
+
+            return products;
+        }
     }
 }
