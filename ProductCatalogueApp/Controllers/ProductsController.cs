@@ -35,7 +35,6 @@ namespace ProductCatalogueApp.Controllers
         {
             try
             {
-                throw new Exception("Bla bla");
                 ViewData["CurrentFilter"] = searchString;
 
                 _logger.LogInformation("In index");

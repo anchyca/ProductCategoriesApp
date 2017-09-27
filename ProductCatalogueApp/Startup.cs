@@ -86,6 +86,7 @@ namespace ProductCatalogueApp
                 app.UseExceptionHandler("/Home/Error");
             }
             app.UseMiddleware<ExceptionHandler>(Configuration.GetConnectionString("RavenConnectionString"));
+            app.UseMiddleware<RequestMonitor>(Configuration.GetConnectionString("RavenConnectionString"));
             loggerFactory.AddConsole(Configuration.GetSection("Logging"));
             loggerFactory.AddDebug();
 
