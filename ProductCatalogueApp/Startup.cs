@@ -11,6 +11,8 @@ using Microsoft.Extensions.DependencyInjection;
 using ProductCatalogueApp.Data;
 using ProductCatalogueApp.Models;
 using ProductCatalogueApp.Services;
+using Microsoft.Extensions.Logging;
+using ProductCatalogueApp.Extensions;
 
 namespace ProductCatalogueApp
 {
@@ -71,7 +73,7 @@ namespace ProductCatalogueApp
         }
 
         // This method gets called by the runtime. Use this method to configure the HTTP request pipeline.
-        public void Configure(IApplicationBuilder app, IHostingEnvironment env, RoleManager<IdentityRole> roleManager)
+        public void Configure(IApplicationBuilder app, IHostingEnvironment env, ILoggerFactory loggerFactory)
         {
             if (env.IsDevelopment())
             {
@@ -83,10 +85,14 @@ namespace ProductCatalogueApp
             {
                 app.UseExceptionHandler("/Home/Error");
             }
+            app.UseMiddleware<ExceptionHandler>(Configuration.GetConnectionString("RavenConnectionString"));
+            loggerFactory.AddConsole(Configuration.GetSection("Logging"));
+            loggerFactory.AddDebug();
 
             app.UseStaticFiles();
 
             app.UseAuthentication();
+            
 
             app.UseMvc(routes =>
             {

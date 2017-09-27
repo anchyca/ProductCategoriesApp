@@ -12,6 +12,8 @@ using Microsoft.WindowsAzure.Storage; // Namespace for CloudStorageAccount
 using Microsoft.WindowsAzure.Storage.Blob; // Namespace for Blob storage types
 using Microsoft.Extensions.Options;
 using Microsoft.WindowsAzure.Storage.Auth;
+using Microsoft.Extensions.Logging;
+using Microsoft.AspNetCore.Authorization;
 
 namespace ProductCatalogueApp.Controllers
 {
@@ -19,55 +21,75 @@ namespace ProductCatalogueApp.Controllers
     {
         private readonly ApplicationDbContext _context;
         private readonly AzureStorageConfig storageConfig;
+        private readonly ILogger _logger;
 
-        public ProductsController(ApplicationDbContext context, IOptions<AzureStorageConfig> config)
+        public ProductsController(ApplicationDbContext context, IOptions<AzureStorageConfig> config, ILogger<ProductsController> logger)
         {
             _context = context;
             storageConfig = config.Value;
+            this._logger = logger;
         }
 
         // GET: Products
         public async Task<IActionResult> Index(string currentFilter, string searchString, int? page)
         {
-            ViewData["CurrentFilter"] = searchString;
-
-            var products = _context.Product
-                    .Include(x => x.Categories)
-                    .ThenInclude(x => x.Category).Where(x => x.IsActive == true);
-
-            if (searchString != null)
+            try
             {
-                page = 1;
+                throw new Exception("Bla bla");
+                ViewData["CurrentFilter"] = searchString;
+
+                _logger.LogInformation("In index");
+
+                var products = _context.Product
+                        .Include(x => x.Categories)
+                        .ThenInclude(x => x.Category).Where(x => x.IsActive == true);
+
+                if (searchString != null)
+                {
+                    page = 1;
+                }
+                else
+                {
+                    searchString = currentFilter;
+                }
+
+                if (!string.IsNullOrEmpty(searchString))
+                {
+                    var productIds = await _context.Category
+                                        .Include(x => x.Products)
+                                        .Where(x => x.Name.Contains(searchString))
+                                        .SelectMany(x => x.Products.Select(y => y.ProductId))
+                                        .ToListAsync();
+                    products = products
+                        .Where(x => x.IsActive == true &&
+                                (x.SKU.Contains(searchString) || x.Name.Contains(searchString) || productIds.Contains(x.ID)));
+                }
+
+                int pageSize = 3;
+                return View(await PaginatedList<Product>.CreateAsync(products.AsNoTracking(), page ?? 1, pageSize));
             }
-            else
+            catch (Exception ex)
             {
-                searchString = currentFilter;
+                _logger.LogError(ex, message: "Greška prilikom dohvaćanja produkata");
+                return View("Error");
             }
-
-            if (!string.IsNullOrEmpty(searchString))
-            {
-                var productIds = await _context.Category
-                                    .Include(x => x.Products)
-                                    .Where(x => x.Name.Contains(searchString))
-                                    .SelectMany(x => x.Products.Select(y => y.ProductId))
-                                    .ToListAsync();
-                products = products
-                    .Where(x => x.IsActive == true &&
-                            (x.SKU.Contains(searchString) || x.Name.Contains(searchString) || productIds.Contains(x.ID)));
-            }
-
-            int pageSize = 3;
-            return View(await PaginatedList<Product>.CreateAsync(products.AsNoTracking(), page ?? 1, pageSize));
-
         }
 
         public async Task<IActionResult> GetProductByCategory(int categoryId)
         {
-            var products = await _context.Product
-                            .Include(x => x.Categories)
-                                .ThenInclude(x => x.Category)
-                            .Where(x => x.Categories.Select(y => y.CategoryId).Contains(categoryId)).ToListAsync();
-            return View(products);
+            try
+            {
+                var products = await _context.Product
+                                .Include(x => x.Categories)
+                                    .ThenInclude(x => x.Category)
+                                .Where(x => x.Categories.Select(y => y.CategoryId).Contains(categoryId)).ToListAsync();
+                return View(products);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, message: "Greška prilikom dohvaćanja produkata prema ID-u kategorije");
+                return View("Error");
+            }
         }
 
         // GET: Products/Details/5
@@ -77,20 +99,27 @@ namespace ProductCatalogueApp.Controllers
             {
                 return NotFound();
             }
-
-            var product = await _context.Product
-                .SingleOrDefaultAsync(m => m.ID == id);
-            if (product == null)
+            try
             {
-                return NotFound();
+                var product = await _context.Product
+                    .SingleOrDefaultAsync(m => m.ID == id);
+                if (product == null)
+                {
+                    return NotFound();
+                }
+
+                product.ImagePath = GetImagePath(product.ImageName);
+
+                return View(product);
             }
-
-            product.ImagePath = GetImagePath(product.ImageName);
-
-            return View(product);
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, message: "Greška prilikom dohvaćanja detalja produkta s ID-em" + id.Value.ToString());
+                return View("Error", new ErrorViewModel { ErrorMessage = "Došlo je do greške prilikom dohvaćanja detalja produkta." });
+            }
         }
 
-       
+        [Authorize(Roles = "Admin")]
         // GET: Products/Create
         public IActionResult Create()
         {
@@ -104,28 +133,38 @@ namespace ProductCatalogueApp.Controllers
         // more details see http://go.microsoft.com/fwlink/?LinkId=317598.
         [HttpPost]
         [ValidateAntiForgeryToken]
+        [Authorize(Roles = "Admin")]
         public async Task<IActionResult> Create(ProductCategoriesViewModel productCategoriesViewModel, IFormFile file, string[] selectedCategories)
         {
             if (ModelState.IsValid)
             {
-                productCategoriesViewModel.Image = file;
-                var product = productCategoriesViewModel.ToProductModel();
+                try
+                {
+                    productCategoriesViewModel.Image = file;
+                    var product = productCategoriesViewModel.ToProductModel();
 
-                product.DateCreated = DateTime.Now;
-                product.UserCreated = User.Identity.Name;
+                    product.DateCreated = DateTime.Now;
+                    product.UserCreated = User.Identity.Name;
 
-                await UploadImageToAzure(file);
+                    await UploadImageToAzure(file);
 
-                AddCategoriesToProduct(product, selectedCategories);
-                _context.Add(product);
-                await _context.SaveChangesAsync();
-                return RedirectToAction(nameof(Index));
+                    AddCategoriesToProduct(product, selectedCategories);
+                    _context.Add(product);
+                    await _context.SaveChangesAsync();
+                    return RedirectToAction(nameof(Index));
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, message: "Greška prilikom stvaranja produkta");
+                    return View("Error");
+                }
             }
             return View(productCategoriesViewModel);
         }
 
 
         // GET: Products/Edit/5
+        [Authorize(Roles = "Admin")]
         public async Task<IActionResult> Edit(int? id)
         {
             if (id == null)
@@ -154,6 +193,7 @@ namespace ProductCatalogueApp.Controllers
         // more details see http://go.microsoft.com/fwlink/?LinkId=317598.
         [HttpPost]
         [ValidateAntiForgeryToken]
+        [Authorize(Roles = "Admin")]
         public async Task<IActionResult> Edit(int id, [Bind("ProductID,SKU,Name,ImagePath")] ProductCategoriesViewModel productCategoriesViewModel, IFormFile file, string[] selectedCategories)
         {
             if (id != productCategoriesViewModel.ProductID)
@@ -193,7 +233,9 @@ namespace ProductCatalogueApp.Controllers
                     }
                     else
                     {
-                        throw;
+                        _logger.LogError("Greška prilikom editiranja produkta.");
+                        return View("Error");
+
                     }
                 }
                 return RedirectToAction(nameof(Index));
@@ -202,6 +244,7 @@ namespace ProductCatalogueApp.Controllers
         }
 
         // GET: Products/Delete/5
+        [Authorize(Roles = "Admin")]
         public async Task<IActionResult> Delete(int? id)
         {
             if (id == null)
@@ -222,17 +265,26 @@ namespace ProductCatalogueApp.Controllers
         // POST: Products/Delete/5
         [HttpPost, ActionName("Delete")]
         [ValidateAntiForgeryToken]
+        [Authorize(Roles = "Admin")]
         public async Task<IActionResult> DeleteConfirmed(int id)
         {
-            var product = await _context.Product.SingleOrDefaultAsync(m => m.ID == id);
+            try
+            {
+                var product = await _context.Product.SingleOrDefaultAsync(m => m.ID == id);
 
-            product.DateModified = DateTime.Now;
-            product.UserModified = User.Identity.Name;
-            product.IsActive = false;
+                product.DateModified = DateTime.Now;
+                product.UserModified = User.Identity.Name;
+                product.IsActive = false;
 
-            _context.Product.Update(product);
-            await _context.SaveChangesAsync();
-            return RedirectToAction(nameof(Index));
+                _context.Product.Update(product);
+                await _context.SaveChangesAsync();
+                return RedirectToAction(nameof(Index));
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, message: "Greška prilikom brisanja produkta s ID-em " + id.ToString());
+                return View("Error");
+            }
         }
 
         private bool ProductExists(int id)

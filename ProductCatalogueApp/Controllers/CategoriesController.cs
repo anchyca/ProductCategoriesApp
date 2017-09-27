@@ -8,47 +8,66 @@ using Microsoft.EntityFrameworkCore;
 using ProductCatalogueApp.Data;
 using ProductCatalogueApp.Models;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.Extensions.Logging;
 
 namespace ProductCatalogueApp.Controllers
 {
     public class CategoriesController : Controller
     {
         private readonly ApplicationDbContext _context;
+        private readonly ILogger _logger;
 
-        public CategoriesController(ApplicationDbContext context)
+        public CategoriesController(ApplicationDbContext context, ILogger<CategoriesController> logger)
         {
             _context = context;
+            _logger = logger;
         }
 
         // GET: Categories
         public async Task<IActionResult> Index()
         {
-            return View(await _context.Category.ToListAsync());
+            try
+            {
+                return View(await _context.Category.ToListAsync());
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, message: "Greška prilikom dohvata kategorija.");
+                return View("Error");
+            }
         }
 
         public async Task<IActionResult> Index(string currentFilter, string searchString, int? page)
         {
-            ViewData["CurrentFilter"] = searchString;
-
-            var categories = _context.Category.Select(x => x);
-
-            if (searchString != null)
+            try
             {
-                page = 1;
-            }
-            else
-            {
-                searchString = currentFilter;
-            }
+                ViewData["CurrentFilter"] = searchString;
 
-            if (!string.IsNullOrEmpty(searchString))
-            {
-                categories = categories
-                    .Where(x => x.Name.Contains(searchString));
-            }
+                var categories = _context.Category.Select(x => x);
 
-            int pageSize = 3;
-            return View(await PaginatedList<Category>.CreateAsync(categories.AsNoTracking(), page ?? 1, pageSize));
+                if (searchString != null)
+                {
+                    page = 1;
+                }
+                else
+                {
+                    searchString = currentFilter;
+                }
+
+                if (!string.IsNullOrEmpty(searchString))
+                {
+                    categories = categories
+                        .Where(x => x.Name.Contains(searchString));
+                }
+
+                int pageSize = 3;
+                return View(await PaginatedList<Category>.CreateAsync(categories.AsNoTracking(), page ?? 1, pageSize));
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, message: "Greška prilikom dohvata kategorija.");
+                return View("Error");
+            }
         }
 
         // GET: Categories/Details/5
@@ -84,15 +103,23 @@ namespace ProductCatalogueApp.Controllers
         [Authorize(Roles = "Admin")]
         public async Task<IActionResult> Create([Bind("ID,Name")] Category category)
         {
-            if (ModelState.IsValid)
+            try
             {
-                category.DateCreated = DateTime.Now;
-                category.UserCreated = User.Identity.Name;
-                _context.Add(category);
-                await _context.SaveChangesAsync();
-                return RedirectToAction(nameof(Index));
+                if (ModelState.IsValid)
+                {
+                    category.DateCreated = DateTime.Now;
+                    category.UserCreated = User.Identity.Name;
+                    _context.Add(category);
+                    await _context.SaveChangesAsync();
+                    return RedirectToAction(nameof(Index));
+                }
+                return View(category);
             }
-            return View(category);
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, message: "Greška prilikom stvaranja kategorije.");
+                return View("Error");
+            }
         }
 
         // GET: Categories/Edit/5
@@ -142,7 +169,8 @@ namespace ProductCatalogueApp.Controllers
                     }
                     else
                     {
-                        throw;
+                        _logger.LogError("Greška prilikom editiranja kategorije.");
+                        return View("Error");
                     }
                 }
                 return RedirectToAction(nameof(Index));
@@ -175,10 +203,18 @@ namespace ProductCatalogueApp.Controllers
         [Authorize(Roles = "Admin")]
         public async Task<IActionResult> DeleteConfirmed(int id)
         {
-            var category = await _context.Category.SingleOrDefaultAsync(m => m.ID == id);
-            _context.Category.Remove(category);
-            await _context.SaveChangesAsync();
-            return RedirectToAction(nameof(Index));
+            try
+            {
+                var category = await _context.Category.SingleOrDefaultAsync(m => m.ID == id);
+                _context.Category.Remove(category);
+                await _context.SaveChangesAsync();
+                return RedirectToAction(nameof(Index));
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, message: "Greška prilikom brisanja kategorije.");
+                return View("Error");
+            }
         }
 
         private bool CategoryExists(int id)
