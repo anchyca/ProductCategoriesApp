@@ -28,6 +28,7 @@ namespace ProductCatalogueApp.Services
             catch (Exception e)
             {
                 _ravenClient.Capture(new SentryEvent(e));
+                throw e;
             }
         }
     }

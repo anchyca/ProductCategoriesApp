@@ -25,7 +25,7 @@ namespace ProductCatalogueWebApi
             services.AddDbContext<ProductCatalogueDbContext>(options =>
                 options.UseSqlServer(Configuration.GetConnectionString("AzureSQLConnection")));
 
-            services.AddSingleton<IConfiguration>(Configuration);
+            services.AddSingleton(Configuration);
             services.AddScoped<IProductsService, ProductsService>();
             services.AddScoped<ICategoriesService, CateogiresService>();
 

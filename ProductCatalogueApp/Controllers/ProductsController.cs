@@ -41,22 +41,15 @@ namespace ProductCatalogueApp.Controllers
         // GET: Products
         public async Task<IActionResult> Index(string currentFilter, string searchString, int? page)
         {
-            try
-            {
-                ViewData["CurrentFilter"] = searchString;
+            ViewData["CurrentFilter"] = searchString;
 
-                int pageSize = _configuration.GetValue<int>("ProductsPageSize");
+            int pageSize = _configuration.GetValue<int>("ProductsPageSize");
 
-                var products = await _productsService.GetProductsByFilter(currentFilter, searchString);
+            var products = await _productsService.GetProductsByFilter(currentFilter, searchString);
 
 
-                return View(await PaginatedList<Product>.CreateAsync(products, page ?? 1, pageSize));
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, message: "Greška prilikom dohvaćanja produkata");
-                return View("Error");
-            }
+            return View(await PaginatedList<Product>.CreateAsync(products, page ?? 1, pageSize));
+
         }
 
 
@@ -67,27 +60,20 @@ namespace ProductCatalogueApp.Controllers
             {
                 return NotFound();
             }
-            try
+            var product = await _productsService.GetProductById(id.Value);
+
+            if (product == null)
             {
-                var product = await _productsService.GetProductById(id.Value);
-
-                if (product == null)
-                {
-                    return NotFound();
-                }
-
-                if (!string.IsNullOrEmpty(product.ImageName))
-                {
-                    product.ImagePath = _storageService.GetImagePath(product.ImageName);
-                }
-
-                return View(product);
+                return NotFound();
             }
-            catch (Exception ex)
+
+            if (!string.IsNullOrEmpty(product.ImageName))
             {
-                _logger.LogError(ex, message: "Greška prilikom dohvaćanja detalja produkta s ID-em" + id.Value.ToString());
-                return View("Error", new ErrorViewModel { ErrorMessage = "Došlo je do greške prilikom dohvaćanja detalja produkta." });
+                product.ImagePath = _storageService.GetImagePath(product.ImageName);
             }
+
+            return View(product);
+
         }
 
         [Authorize(Roles = "Admin")]
@@ -109,26 +95,20 @@ namespace ProductCatalogueApp.Controllers
         {
             if (ModelState.IsValid)
             {
-                try
-                {
-                    productCategoriesViewModel.Image = file;
-                    var product = productCategoriesViewModel.ToProductModel();
 
-                    product.DateCreated = DateTime.Now;
-                    product.UserCreated = User.Identity.Name;
+                productCategoriesViewModel.Image = file;
+                var product = productCategoriesViewModel.ToProductModel();
 
-                    await _storageService.UploadImageToStorage(file);
+                product.DateCreated = DateTime.Now;
+                product.UserCreated = User.Identity.Name;
 
-                    AddCategoriesToProduct(product, selectedCategories);
-                    await _productsService.CreateProduct(product);
+                await _storageService.UploadImageToStorage(file);
 
-                    return RedirectToAction(nameof(Index));
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogError(ex, message: "Greška prilikom stvaranja produkta");
-                    return View("Error");
-                }
+                AddCategoriesToProduct(product, selectedCategories);
+                await _productsService.CreateProduct(product);
+
+                return RedirectToAction(nameof(Index));
+
             }
             return View(productCategoriesViewModel);
         }
@@ -204,12 +184,11 @@ namespace ProductCatalogueApp.Controllers
                     {
                         return NotFound();
                     }
-                    else
-                    {
-                        _logger.LogError("Greška prilikom editiranja produkta.");
-                        return View("Error");
+                    //else
+                    //{
+                    //    throw el
 
-                    }
+                    //}
                 }
                 return RedirectToAction(nameof(Index));
             }
@@ -241,23 +220,17 @@ namespace ProductCatalogueApp.Controllers
         [Authorize(Roles = "Admin")]
         public async Task<IActionResult> DeleteConfirmed(int id)
         {
-            try
-            {
-                var product = await _productsService.GetProductById(id);
 
-                product.DateModified = DateTime.Now;
-                product.UserModified = User.Identity.Name;
-                product.IsActive = false;
+            var product = await _productsService.GetProductById(id);
 
-                await _productsService.UpdateProduct(product);
+            product.DateModified = DateTime.Now;
+            product.UserModified = User.Identity.Name;
+            product.IsActive = false;
 
-                return RedirectToAction(nameof(Index));
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, message: "Greška prilikom brisanja produkta s ID-em " + id.ToString());
-                return View("Error");
-            }
+            await _productsService.UpdateProduct(product);
+
+            return RedirectToAction(nameof(Index));
+
         }
 
 

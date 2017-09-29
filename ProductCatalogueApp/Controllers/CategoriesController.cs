@@ -30,15 +30,7 @@ namespace ProductCatalogueApp.Controllers
         // GET: Categories
         public async Task<IActionResult> Index()
         {
-            try
-            {
-                return View(await _categoriesService.GetAllCategoriesList());
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, message: "Greška prilikom dohvata kategorija.");
-                return View("Error");
-            }
+            return View(await _categoriesService.GetAllCategoriesList());
         }
 
         // GET: Categories/Details/5
@@ -73,24 +65,16 @@ namespace ProductCatalogueApp.Controllers
         [Authorize(Roles = "Admin")]
         public async Task<IActionResult> Create([Bind("ID,Name")] Category category)
         {
-            try
+            if (ModelState.IsValid)
             {
-                if (ModelState.IsValid)
-                {
-                    category.DateCreated = DateTime.Now;
-                    category.UserCreated = User.Identity.Name;
+                category.DateCreated = DateTime.Now;
+                category.UserCreated = User.Identity.Name;
 
-                    await _categoriesService.CreateCategory(category);
+                await _categoriesService.CreateCategory(category);
 
-                    return RedirectToAction(nameof(Index));
-                }
-                return View(category);
+                return RedirectToAction(nameof(Index));
             }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, message: "Greška prilikom stvaranja kategorije.");
-                return View("Error");
-            }
+            return View(category);
         }
 
         // GET: Categories/Edit/5
@@ -137,11 +121,11 @@ namespace ProductCatalogueApp.Controllers
                     {
                         return NotFound();
                     }
-                    else
-                    {
-                        _logger.LogError("Greška prilikom editiranja kategorije.");
-                        return View("Error");
-                    }
+                    //else
+                    //{
+                    //    _logger.LogError("Greška prilikom editiranja kategorije.");
+                    //    return View("Error");
+                    //}
                 }
                 return RedirectToAction(nameof(Index));
             }
@@ -173,16 +157,10 @@ namespace ProductCatalogueApp.Controllers
         [Authorize(Roles = "Admin")]
         public async Task<IActionResult> DeleteConfirmed(int id)
         {
-            try
-            {
-                await _categoriesService.DeleteCategory(id);
-                return RedirectToAction(nameof(Index));
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, message: "Greška prilikom brisanja kategorije.");
-                return View("Error");
-            }
+
+            await _categoriesService.DeleteCategory(id);
+            return RedirectToAction(nameof(Index));
+
         }
     }
 }
