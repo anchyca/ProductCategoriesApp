@@ -1,15 +1,14 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.AspNetCore.Mvc.Rendering;
 using Microsoft.EntityFrameworkCore;
 using ProductCatalogueApp.Data;
-using ProductCatalogueApp.Models;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Configuration;
+using ProductCatalogueAppDb.ServiceInterfaces;
+using ProductCatalogueModels;
 
 namespace ProductCatalogueApp.Controllers
 {
@@ -18,12 +17,14 @@ namespace ProductCatalogueApp.Controllers
         private readonly ApplicationDbContext _context;
         private readonly ILogger _logger;
         private readonly IConfiguration _configuration;
+        private readonly ICategoriesService _categoriesService;
 
-        public CategoriesController(ApplicationDbContext context, ILogger<CategoriesController> logger, IConfiguration configuration)
+        public CategoriesController(ApplicationDbContext context, ILogger<CategoriesController> logger, IConfiguration configuration, ICategoriesService categoriesService)
         {
             _context = context;
             _logger = logger;
             _configuration = configuration;
+            _categoriesService = categoriesService;
         }
 
         // GET: Categories
@@ -31,55 +32,12 @@ namespace ProductCatalogueApp.Controllers
         {
             try
             {
-                return View(await _context.Category.ToListAsync());
+                return View(await _categoriesService.GetAllCategoriesList());
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, message: "Greška prilikom dohvata kategorija.");
                 return View("Error");
-            }
-        }
-
-        public async Task<JsonResult> GetCategoriesBySearch(string currentFilter, string searchString, int? page)
-        {
-            try
-            {
-                ViewData["CurrentFilter"] = searchString;
-
-                var categories = _context.Category.Select(x => x);
-
-                if (searchString != null)
-                {
-                    page = 1;
-                }
-                else
-                {
-                    searchString = currentFilter;
-                }
-
-                if (!string.IsNullOrEmpty(searchString))
-                {
-                    categories = categories
-                        .Where(x => x.Name.Contains(searchString));
-                }
-
-                int pageSize = _configuration.GetValue<int>("CategoriesPageSize");
-
-                return new JsonResult(new
-                {
-                    categories = await PaginatedList<Category>.CreateAsync(categories.AsNoTracking(), page ?? 1, pageSize),
-                    hasErrors = false,
-                    errorMessage = ""
-                });
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, message: "Greška prilikom dohvata kategorija.");
-                return new JsonResult(new
-                {
-                    hasErrors = true,
-                    errorMessage = "Greška prilikom dohvata kategorija."
-                });
             }
         }
 
@@ -91,8 +49,7 @@ namespace ProductCatalogueApp.Controllers
                 return NotFound();
             }
 
-            var category = await _context.Category
-                .SingleOrDefaultAsync(m => m.ID == id);
+            var category = await _categoriesService.GetCategoryById(id.Value);
             if (category == null)
             {
                 return NotFound();
@@ -122,8 +79,9 @@ namespace ProductCatalogueApp.Controllers
                 {
                     category.DateCreated = DateTime.Now;
                     category.UserCreated = User.Identity.Name;
-                    _context.Add(category);
-                    await _context.SaveChangesAsync();
+
+                    await _categoriesService.CreateCategory(category);
+
                     return RedirectToAction(nameof(Index));
                 }
                 return View(category);
@@ -144,7 +102,7 @@ namespace ProductCatalogueApp.Controllers
                 return NotFound();
             }
 
-            var category = await _context.Category.SingleOrDefaultAsync(m => m.ID == id);
+            var category = await _categoriesService.GetCategoryById(id.Value);
             if (category == null)
             {
                 return NotFound();
@@ -171,12 +129,11 @@ namespace ProductCatalogueApp.Controllers
                 {
                     category.DateModified = DateTime.Now;
                     category.UserModified = User.Identity.Name;
-                    _context.Update(category);
-                    await _context.SaveChangesAsync();
+                    await _categoriesService.UpdateCategory(category);
                 }
                 catch (DbUpdateConcurrencyException)
                 {
-                    if (!CategoryExists(category.ID))
+                    if (!(await _categoriesService.CategoryExists(category.ID)))
                     {
                         return NotFound();
                     }
@@ -200,8 +157,8 @@ namespace ProductCatalogueApp.Controllers
                 return NotFound();
             }
 
-            var category = await _context.Category
-                .SingleOrDefaultAsync(m => m.ID == id);
+            var category = await _categoriesService.GetCategoryById(id.Value);
+
             if (category == null)
             {
                 return NotFound();
@@ -218,9 +175,7 @@ namespace ProductCatalogueApp.Controllers
         {
             try
             {
-                var category = await _context.Category.SingleOrDefaultAsync(m => m.ID == id);
-                _context.Category.Remove(category);
-                await _context.SaveChangesAsync();
+                await _categoriesService.DeleteCategory(id);
                 return RedirectToAction(nameof(Index));
             }
             catch (Exception ex)
@@ -228,11 +183,6 @@ namespace ProductCatalogueApp.Controllers
                 _logger.LogError(ex, message: "Greška prilikom brisanja kategorije.");
                 return View("Error");
             }
-        }
-
-        private bool CategoryExists(int id)
-        {
-            return _context.Category.Any(e => e.ID == id);
         }
     }
 }

@@ -9,7 +9,7 @@
 <hr />
 <div class="row">
     <div class="col-md-4">
-        <form asp-action="Edit">
+        <form asp-action="Edit" enctype="multipart/form-data">
             <div asp-validation-summary="ModelOnly" class="text-danger"></div>
             <input type="hidden" asp-for="ProductID" />
             <div class="form-group">
@@ -24,7 +24,7 @@
             </div>
             <div class="form-group">
                 <label asp-for="Image" class="control-label"></label>
-                <img src="@Model.ImagePath" height="200" width="500"/>
+                <img src="@Model.ImagePath" height="200" width="500" />
                 <input type="file" name="file" />
                 <span asp-validation-for="Image" class="text-danger"></span>
             </div>

@@ -3,7 +3,6 @@ using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using ProductCatalogueApp.Data;
-using ProductCatalogueApp.Models;
 using ProductCatalogueApp.Models.ProductViewModels;
 using System;
 using System.Collections.Generic;
@@ -15,22 +14,28 @@ using Microsoft.WindowsAzure.Storage.Auth;
 using Microsoft.Extensions.Logging;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.Extensions.Configuration;
+using ProductCatalogueAppDb.ServiceInterfaces;
+using ProductCatalogueModels;
+using ProductCatalogueApp.Models;
+using ProductCatalogueApp.Services;
 
 namespace ProductCatalogueApp.Controllers
 {
     public class ProductsController : Controller
     {
-        private readonly ApplicationDbContext _context;
-        private readonly AzureStorageConfig storageConfig;
         private readonly ILogger _logger;
         private readonly IConfiguration _configuration;
+        private readonly IProductsService _productsService;
+        private readonly ICategoriesService _categoriesService;
+        private readonly IStorageService _storageService;
 
-        public ProductsController(ApplicationDbContext context, IOptions<AzureStorageConfig> config, ILogger<ProductsController> logger, IConfiguration configuration)
+        public ProductsController(ILogger<ProductsController> logger, IConfiguration configuration, IProductsService productsService, ICategoriesService categoriesService, IStorageService storageService)
         {
-            _context = context;
-            storageConfig = config.Value;
             this._logger = logger;
             _configuration = configuration;
+            _categoriesService = categoriesService;
+            _storageService = storageService;
+            _productsService = productsService;
         }
 
         // GET: Products
@@ -38,9 +43,14 @@ namespace ProductCatalogueApp.Controllers
         {
             try
             {
-                var products = await GetProducts(searchString, page, currentFilter);
+                ViewData["CurrentFilter"] = searchString;
+
                 int pageSize = _configuration.GetValue<int>("ProductsPageSize");
-                return View(await PaginatedList<Product>.CreateAsync(products.AsNoTracking(), page ?? 1, pageSize));
+
+                var products = await _productsService.GetProductsByFilter(currentFilter, searchString);
+
+
+                return View(await PaginatedList<Product>.CreateAsync(products, page ?? 1, pageSize));
             }
             catch (Exception ex)
             {
@@ -49,55 +59,6 @@ namespace ProductCatalogueApp.Controllers
             }
         }
 
-        public async Task<JsonResult> GetAllProducts(string currentFilter, string searchString, int? page)
-        {
-            try
-            {
-                var products = await GetProducts(searchString, page, currentFilter);
-
-                return new JsonResult(new
-                {
-                    products = products,
-                    hasErrors = false,
-                    errorMessage = ""
-                });
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, message: "Greška prilikom dohvaćanja produkata.");
-                return new JsonResult(new
-                {
-                    hasErrors = true,
-                    errorMessage = "Greška prilikom dohvaćanja produkata."
-                });
-            }
-        }
-
-        public async Task<JsonResult> GetProductByCategory(int categoryId)
-        {
-            try
-            {
-                var products = await _context.Product
-                                .Include(x => x.Categories)
-                                    .ThenInclude(x => x.Category)
-                                .Where(x => x.Categories.Select(y => y.CategoryId).Contains(categoryId)).ToListAsync();
-                return new JsonResult(new
-                {
-                    products = products,
-                    hasErrors = false,
-                    errorMessage = ""
-                });
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, message: "Greška prilikom dohvaćanja produkata prema ID-u kategorije");
-                return new JsonResult(new
-                {
-                    hasErrors = true,
-                    errorMessage = "Greška prilikom dohvaćanja produkata prema ID-u kategorije"
-                });
-            }
-        }
 
         // GET: Products/Details/5
         public async Task<IActionResult> Details(int? id)
@@ -108,14 +69,17 @@ namespace ProductCatalogueApp.Controllers
             }
             try
             {
-                var product = await _context.Product
-                    .SingleOrDefaultAsync(m => m.ID == id);
+                var product = await _productsService.GetProductById(id.Value);
+
                 if (product == null)
                 {
                     return NotFound();
                 }
 
-                product.ImagePath = GetImagePath(product.ImageName);
+                if (!string.IsNullOrEmpty(product.ImageName))
+                {
+                    product.ImagePath = _storageService.GetImagePath(product.ImageName);
+                }
 
                 return View(product);
             }
@@ -153,11 +117,11 @@ namespace ProductCatalogueApp.Controllers
                     product.DateCreated = DateTime.Now;
                     product.UserCreated = User.Identity.Name;
 
-                    await UploadImageToAzure(file);
+                    await _storageService.UploadImageToStorage(file);
 
                     AddCategoriesToProduct(product, selectedCategories);
-                    _context.Add(product);
-                    await _context.SaveChangesAsync();
+                    await _productsService.CreateProduct(product);
+
                     return RedirectToAction(nameof(Index));
                 }
                 catch (Exception ex)
@@ -179,9 +143,8 @@ namespace ProductCatalogueApp.Controllers
                 return NotFound();
             }
 
-            var product = await _context.Product
-                        .Include(x => x.Categories)
-                        .SingleOrDefaultAsync(m => m.ID == id);
+            var product = await _productsService.GetProductWithCategories(id.Value);
+
             if (product == null)
             {
                 return NotFound();
@@ -189,7 +152,10 @@ namespace ProductCatalogueApp.Controllers
 
             var productViewModel = product.ToProductViewModel();
             PopulateAssignedCategories(productViewModel, product.Categories);
-            productViewModel.ImagePath = GetImagePath(productViewModel.ImageName);
+            if (!string.IsNullOrEmpty(product.ImageName))
+            {
+                productViewModel.ImagePath = _storageService.GetImagePath(productViewModel.ImageName);
+            }
 
             return View(productViewModel);
         }
@@ -212,29 +178,29 @@ namespace ProductCatalogueApp.Controllers
             {
                 try
                 {
-                    var productToUpdate = await _context.Product.Include(x => x.Categories).SingleOrDefaultAsync(x => x.ID == id);
+                    var productToUpdate = await _productsService.GetProductWithCategories(id);
+
                     productToUpdate.Name = productCategoriesViewModel.Name;
                     productToUpdate.SKU = productCategoriesViewModel.SKU;
 
                     if (file.FileName.CompareTo(productToUpdate.ImageName) != 0)
                     {
                         productToUpdate.ImageName = file.FileName;
-                        await DeleteImageFromAzure(file);
-                        await UploadImageToAzure(file);
+                        await _storageService.DeleteImageFromStorage(file);
+                        await _storageService.UploadImageToStorage(file);
                     }
 
                     productToUpdate.DateModified = DateTime.Now;
                     productToUpdate.UserModified = User.Identity.Name;
 
-                    UpdateProductCategories(productToUpdate, selectedCategories);
+                    _productsService.UpdateProductCategories(productToUpdate, selectedCategories);
                     PopulateAssignedCategories(productCategoriesViewModel, productToUpdate.Categories);
 
-                    _context.Update(productToUpdate);
-                    await _context.SaveChangesAsync();
+                    await _productsService.UpdateProduct(productToUpdate);
                 }
                 catch (DbUpdateConcurrencyException)
                 {
-                    if (!ProductExists(productCategoriesViewModel.ProductID))
+                    if (!(await _productsService.ProductExists(productCategoriesViewModel.ProductID)))
                     {
                         return NotFound();
                     }
@@ -259,8 +225,8 @@ namespace ProductCatalogueApp.Controllers
                 return NotFound();
             }
 
-            var product = await _context.Product
-                .SingleOrDefaultAsync(m => m.ID == id);
+            var product = await _productsService.GetProductById(id.Value);
+
             if (product == null)
             {
                 return NotFound();
@@ -277,14 +243,14 @@ namespace ProductCatalogueApp.Controllers
         {
             try
             {
-                var product = await _context.Product.SingleOrDefaultAsync(m => m.ID == id);
+                var product = await _productsService.GetProductById(id);
 
                 product.DateModified = DateTime.Now;
                 product.UserModified = User.Identity.Name;
                 product.IsActive = false;
 
-                _context.Product.Update(product);
-                await _context.SaveChangesAsync();
+                await _productsService.UpdateProduct(product);
+
                 return RedirectToAction(nameof(Index));
             }
             catch (Exception ex)
@@ -294,14 +260,11 @@ namespace ProductCatalogueApp.Controllers
             }
         }
 
-        private bool ProductExists(int id)
-        {
-            return _context.Product.Any(e => e.ID == id);
-        }
 
+        #region privateFunctions
         private ICollection<AssignedProductCategory> FetchCategories()
         {
-            var categories = _context.Category;
+            var categories = _categoriesService.GetAllCategories();
             var assignedCategories = new List<AssignedProductCategory>();
 
             foreach (var item in categories)
@@ -331,7 +294,7 @@ namespace ProductCatalogueApp.Controllers
 
         private void PopulateAssignedCategories(ProductCategoriesViewModel productViewModel, ICollection<ProductCategory> productCategories)
         {
-            var allCategories = _context.Category;
+            var allCategories = _categoriesService.GetAllCategories();
             var categories = productCategories.Select(x => x.CategoryId).ToList();
             var assignViewModel = new List<AssignedProductCategory>();
             foreach (var category in allCategories)
@@ -346,140 +309,6 @@ namespace ProductCatalogueApp.Controllers
 
             productViewModel.Categories = assignViewModel;
         }
-
-        private void UpdateProductCategories(Product product, string[] selectedCategories)
-        {
-            if (selectedCategories == null)
-            {
-                product.Categories = new List<ProductCategory>();
-                return;
-            }
-
-            var currentCategories = product.Categories.Select(x => x.CategoryId).ToList();
-            var allCategories = _context.Category;
-
-            foreach (var category in allCategories)
-            {
-                if (selectedCategories.Contains(category.ID.ToString()))
-                {
-                    if (!currentCategories.Contains(category.ID))
-                    {
-                        product.Categories.Add(new ProductCategory
-                        {
-                            CategoryId = category.ID,
-                            ProductId = product.ID
-                        });
-                    }
-                }
-                else
-                {
-                    if (currentCategories.Contains(category.ID))
-                    {
-                        ProductCategory productCategoryToRemove = product.Categories.SingleOrDefault(x => x.CategoryId == category.ID);
-                        _context.Remove(productCategoryToRemove);
-                    }
-                }
-            }
-        }
-
-        private async Task<bool> UploadImageToAzure(IFormFile file)
-        {
-            // Create storagecredentials object by reading the values from the configuration (appsettings.json)
-            StorageCredentials storageCredentials = new StorageCredentials(storageConfig.AccountName, storageConfig.AccountKey);
-
-            // Create cloudstorage account by passing the storagecredentials
-            CloudStorageAccount storageAccount = new CloudStorageAccount(storageCredentials, true);
-
-            // Create the blob client.
-            CloudBlobClient blobClient = storageAccount.CreateCloudBlobClient();
-
-            // Get reference to the blob container by passing the name by reading the value from the configuration (appsettings.json)
-            CloudBlobContainer container = blobClient.GetContainerReference(storageConfig.ImageContainer);
-
-            // Get the reference to the block blob from the container
-            CloudBlockBlob blockBlob = container.GetBlockBlobReference(file.FileName);
-
-            // Upload the file
-            await blockBlob.UploadFromStreamAsync(file.OpenReadStream());
-
-            return await Task.FromResult(true);
-        }
-
-        private async Task<bool> DeleteImageFromAzure(IFormFile file)
-        {
-            // Create storagecredentials object by reading the values from the configuration (appsettings.json)
-            StorageCredentials storageCredentials = new StorageCredentials(storageConfig.AccountName, storageConfig.AccountKey);
-
-            // Create cloudstorage account by passing the storagecredentials
-            CloudStorageAccount storageAccount = new CloudStorageAccount(storageCredentials, true);
-
-            // Create the blob client.
-            CloudBlobClient blobClient = storageAccount.CreateCloudBlobClient();
-
-            // Get reference to the blob container by passing the name by reading the value from the configuration (appsettings.json)
-            CloudBlobContainer container = blobClient.GetContainerReference(storageConfig.ImageContainer);
-
-            // Get the reference to the block blob from the container
-            CloudBlockBlob blockBlob = container.GetBlockBlobReference(file.FileName);
-
-            // Upload the file
-            await blockBlob.DeleteIfExistsAsync();
-
-            return await Task.FromResult(true);
-        }
-
-        private string GetImagePath(string imageName)
-        {
-            // Create storagecredentials object by reading the values from the configuration (appsettings.json)
-            StorageCredentials storageCredentials = new StorageCredentials(storageConfig.AccountName, storageConfig.AccountKey);
-
-            // Create cloudstorage account by passing the storagecredentials
-            CloudStorageAccount storageAccount = new CloudStorageAccount(storageCredentials, true);
-
-            // Create the blob client.
-            CloudBlobClient blobClient = storageAccount.CreateCloudBlobClient();
-
-            // Get reference to the blob container by passing the name by reading the value from the configuration (appsettings.json)
-            CloudBlobContainer container = blobClient.GetContainerReference(storageConfig.ImageContainer);
-
-            // Get the reference to the block blob from the container
-            CloudBlockBlob blockBlob = container.GetBlockBlobReference(imageName);
-
-            return blockBlob.Uri.ToString();
-        }
-
-        private async Task<IQueryable<Product>> GetProducts(string searchString, int? page, string currentFilter)
-        {
-            ViewData["CurrentFilter"] = searchString;
-
-            _logger.LogInformation("In index");
-
-            var products = _context.Product
-                    .Include(x => x.Categories)
-                    .ThenInclude(x => x.Category).Where(x => x.IsActive == true);
-
-            if (searchString != null)
-            {
-                page = 1;
-            }
-            else
-            {
-                searchString = currentFilter;
-            }
-
-            if (!string.IsNullOrEmpty(searchString))
-            {
-                var productIds = await _context.Category
-                                    .Include(x => x.Products)
-                                    .Where(x => x.Name.Contains(searchString))
-                                    .SelectMany(x => x.Products.Select(y => y.ProductId))
-                                    .ToListAsync();
-                products = products
-                    .Where(x => x.IsActive == true &&
-                            (x.SKU.Contains(searchString) || x.Name.Contains(searchString) || productIds.Contains(x.ID)));
-            }
-
-            return products;
-        }
     }
+    #endregion
 }

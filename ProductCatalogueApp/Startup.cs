@@ -13,6 +13,9 @@ using ProductCatalogueApp.Models;
 using ProductCatalogueApp.Services;
 using Microsoft.Extensions.Logging;
 using ProductCatalogueApp.Extensions;
+using ProductCatalogueAppDb.ServiceInterfaces;
+using ProductCatalogueAppDb.ServiceImplementations;
+using ProductCatalogueAppDb;
 
 namespace ProductCatalogueApp
 {
@@ -29,6 +32,9 @@ namespace ProductCatalogueApp
         public void ConfigureServices(IServiceCollection services)
         {
             services.AddDbContext<ApplicationDbContext>(options =>
+                options.UseSqlServer(Configuration.GetConnectionString("AzureSQLConnection")));
+
+            services.AddDbContext<ProductCatalogueDbContext>(options =>
                 options.UseSqlServer(Configuration.GetConnectionString("AzureSQLConnection")));
 
             services.AddIdentity<ApplicationUser, IdentityRole>()
@@ -68,8 +74,14 @@ namespace ProductCatalogueApp
             // Add application services.
             services.AddSingleton<IConfiguration>(Configuration);
             services.AddTransient<IEmailSender, EmailSender>();
+            
             services.AddOptions();
             services.Configure<AzureStorageConfig>(Configuration.GetSection("AzureStorageConfig"));
+
+            services.AddScoped<IStorageService, AzureStorageService>();
+            services.AddScoped<IProductsService, ProductsService>();
+            services.AddScoped<ICategoriesService, CateogiresService>();
+
             services.AddMvc();
         }
 
