@@ -77,6 +77,7 @@ namespace ProductCatalogueApp
             
             services.AddOptions();
             services.Configure<AzureStorageConfig>(Configuration.GetSection("AzureStorageConfig"));
+            services.Configure<PageSizeConfig>(Configuration);
 
             services.AddScoped<IStorageService, AzureStorageService>();
             services.AddScoped<IProductsService, ProductsService>();

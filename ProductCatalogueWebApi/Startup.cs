@@ -29,6 +29,9 @@ namespace ProductCatalogueWebApi
             services.AddScoped<IProductsService, ProductsService>();
             services.AddScoped<ICategoriesService, CateogiresService>();
 
+            services.AddOptions();
+            services.Configure<PageSizeConfig>(Configuration);
+
             services.AddMvc();
         }
 
@@ -42,6 +45,7 @@ namespace ProductCatalogueWebApi
 
             loggerFactory.AddConsole(Configuration.GetSection("Logging"));
             loggerFactory.AddDebug();
+
             app.UseMvc();
         }
     }

@@ -9,6 +9,7 @@ using ProductCatalogueModels;
 using Microsoft.Extensions.Configuration;
 using ProductCatalogueAppDb;
 using ProductCatalogueAppDb.ServiceInterfaces;
+using Microsoft.Extensions.Options;
 
 // For more information on enabling Web API for empty projects, visit https://go.microsoft.com/fwlink/?LinkID=397860
 
@@ -19,13 +20,13 @@ namespace ProductCatalogueWebApi.Controllers
     {
         private readonly IProductsService _productsService;
         private readonly ILogger _logger;
-        private readonly IConfiguration _configuration;
+        private readonly PageSizeConfig _configuration;
 
-        public ProductsController(IProductsService productsService, ILogger<ProductsController> logger, IConfiguration configuration)
+        public ProductsController(IProductsService productsService, ILogger<ProductsController> logger, IOptions<PageSizeConfig> configuration)
         {
             this._productsService = productsService;
             this._logger = logger;
-            this._configuration = configuration;
+            this._configuration = configuration.Value;
         }
 
         [HttpGet]
@@ -33,7 +34,7 @@ namespace ProductCatalogueWebApi.Controllers
         {
             try
             {
-                int pageSize = 3; // _configuration.GetValue<int>("ProductsPageSize");
+                int pageSize = _configuration.ProductsPageSize;
 
                 var products = await _productsService.GetProductsPageByFilter(currentFilter, searchString, page, pageSize);
 

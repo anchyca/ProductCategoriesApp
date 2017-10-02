@@ -24,18 +24,18 @@ namespace ProductCatalogueApp.Controllers
     public class ProductsController : Controller
     {
         private readonly ILogger _logger;
-        private readonly IConfiguration _configuration;
         private readonly IProductsService _productsService;
         private readonly ICategoriesService _categoriesService;
         private readonly IStorageService _storageService;
+        private readonly PageSizeConfig pageSizeConfig;
 
-        public ProductsController(ILogger<ProductsController> logger, IConfiguration configuration, IProductsService productsService, ICategoriesService categoriesService, IStorageService storageService)
+        public ProductsController(ILogger<ProductsController> logger, IProductsService productsService, ICategoriesService categoriesService, IStorageService storageService, IOptions<PageSizeConfig> options)
         {
             this._logger = logger;
-            _configuration = configuration;
             _categoriesService = categoriesService;
             _storageService = storageService;
             _productsService = productsService;
+            pageSizeConfig = options.Value;
         }
 
         // GET: Products
@@ -43,7 +43,7 @@ namespace ProductCatalogueApp.Controllers
         {
             ViewData["CurrentFilter"] = searchString;
 
-            int pageSize = _configuration.GetValue<int>("ProductsPageSize");
+            int pageSize = pageSizeConfig.ProductsPageSize;
 
             var products = await _productsService.GetProductsByFilter(currentFilter, searchString);
 
