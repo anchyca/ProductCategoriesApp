@@ -69,6 +69,8 @@ namespace ProductCatalogueApp.Controllers
             {
                 category.DateCreated = DateTime.Now;
                 category.UserCreated = User.Identity.Name;
+                category.DateModified = DateTime.Now;
+                category.UserModified = User.Identity.Name;
 
                 await _categoriesService.CreateCategory(category);
 
@@ -121,11 +123,7 @@ namespace ProductCatalogueApp.Controllers
                     {
                         return NotFound();
                     }
-                    //else
-                    //{
-                    //    _logger.LogError("Greška prilikom editiranja kategorije.");
-                    //    return View("Error");
-                    //}
+                    throw;
                 }
                 return RedirectToAction(nameof(Index));
             }

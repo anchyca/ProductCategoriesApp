@@ -101,8 +101,12 @@ namespace ProductCatalogueApp.Controllers
 
                 product.DateCreated = DateTime.Now;
                 product.UserCreated = User.Identity.Name;
+                UpdateDateUserModified(product);
 
-                await _storageService.UploadImageToStorage(file);
+                if (file != null)
+                {
+                    await _storageService.UploadImageToStorage(file);
+                }
 
                 AddCategoriesToProduct(product, selectedCategories);
                 await _productsService.CreateProduct(product);
@@ -112,6 +116,8 @@ namespace ProductCatalogueApp.Controllers
             }
             return View(productCategoriesViewModel);
         }
+
+        
 
 
         // GET: Products/Edit/5
@@ -170,8 +176,7 @@ namespace ProductCatalogueApp.Controllers
                         await _storageService.UploadImageToStorage(file);
                     }
 
-                    productToUpdate.DateModified = DateTime.Now;
-                    productToUpdate.UserModified = User.Identity.Name;
+                    UpdateDateUserModified(productToUpdate);
 
                     _productsService.UpdateProductCategories(productToUpdate, selectedCategories);
                     PopulateAssignedCategories(productCategoriesViewModel, productToUpdate.Categories);
@@ -184,11 +189,7 @@ namespace ProductCatalogueApp.Controllers
                     {
                         return NotFound();
                     }
-                    //else
-                    //{
-                    //    throw el
-
-                    //}
+                    throw;
                 }
                 return RedirectToAction(nameof(Index));
             }
@@ -223,8 +224,7 @@ namespace ProductCatalogueApp.Controllers
 
             var product = await _productsService.GetProductById(id);
 
-            product.DateModified = DateTime.Now;
-            product.UserModified = User.Identity.Name;
+            UpdateDateUserModified(product);
             product.IsActive = false;
 
             await _productsService.UpdateProduct(product);
@@ -281,6 +281,12 @@ namespace ProductCatalogueApp.Controllers
             }
 
             productViewModel.Categories = assignViewModel;
+        }
+
+        private void UpdateDateUserModified(Product product)
+        {
+            product.DateModified = DateTime.Now;
+            product.UserCreated = User.Identity.Name;
         }
     }
     #endregion
