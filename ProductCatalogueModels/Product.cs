@@ -31,6 +31,6 @@ namespace ProductCatalogueModels
         public bool IsActive { get; set; }
 
         [DisplayName("Kategorije")]
-        public virtual ICollection<ProductCategory> Categories { get; set; }
+        public virtual List<ProductCategory> Categories { get; set; }
     }
 }

@@ -2,18 +2,13 @@
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
-using ProductCatalogueApp.Data;
-using ProductCatalogueApp.Models.ProductViewModels;
+using ProductCatalogueAppDb.ViewModels;
 using System;
 using System.Collections.Generic;
 using Microsoft.AspNetCore.Http;
-using Microsoft.WindowsAzure.Storage; // Namespace for CloudStorageAccount
-using Microsoft.WindowsAzure.Storage.Blob; // Namespace for Blob storage types
 using Microsoft.Extensions.Options;
-using Microsoft.WindowsAzure.Storage.Auth;
 using Microsoft.Extensions.Logging;
 using Microsoft.AspNetCore.Authorization;
-using Microsoft.Extensions.Configuration;
 using ProductCatalogueAppDb.ServiceInterfaces;
 using ProductCatalogueModels;
 using ProductCatalogueApp.Models;
@@ -44,12 +39,9 @@ namespace ProductCatalogueApp.Controllers
             ViewData["CurrentFilter"] = searchString;
 
             int pageSize = pageSizeConfig.ProductsPageSize;
-
             var products = await _productsService.GetProductsByFilter(currentFilter, searchString);
 
-
-            return View(await PaginatedList<Product>.CreateAsync(products, page ?? 1, pageSize));
-
+            return View(PaginatedList<ProductCategoriesViewModel>.Create(products, page ?? 1, pageSize));
         }
 
 
@@ -78,9 +70,9 @@ namespace ProductCatalogueApp.Controllers
 
         [Authorize(Roles = "Admin")]
         // GET: Products/Create
-        public IActionResult Create()
+        public async Task<IActionResult> Create()
         {
-            var productCategoryViewModel = new ProductCategoriesViewModel { Categories = FetchCategories() };
+            var productCategoryViewModel = new ProductCategoriesViewModel { Categories = await FetchCategories() };
             return View(productCategoryViewModel);
         }
 
@@ -95,30 +87,18 @@ namespace ProductCatalogueApp.Controllers
         {
             if (ModelState.IsValid)
             {
-
                 productCategoriesViewModel.Image = file;
-                var product = productCategoriesViewModel.ToProductModel();
-
-                product.DateCreated = DateTime.Now;
-                product.UserCreated = User.Identity.Name;
-                UpdateDateUserModified(product);
-
                 if (file != null)
                 {
                     await _storageService.UploadImageToStorage(file);
-                }
-
-                AddCategoriesToProduct(product, selectedCategories);
-                await _productsService.CreateProduct(product);
+                }             
+                await _productsService.CreateProduct(productCategoriesViewModel, User.Identity.Name, selectedCategories);
 
                 return RedirectToAction(nameof(Index));
 
             }
             return View(productCategoriesViewModel);
         }
-
-        
-
 
         // GET: Products/Edit/5
         [Authorize(Roles = "Admin")]
@@ -129,16 +109,14 @@ namespace ProductCatalogueApp.Controllers
                 return NotFound();
             }
 
-            var product = await _productsService.GetProductWithCategories(id.Value);
+            var productViewModel = await _productsService.GetProductWithCategories(id.Value);
 
-            if (product == null)
+            if (productViewModel == null)
             {
                 return NotFound();
             }
 
-            var productViewModel = product.ToProductViewModel();
-            PopulateAssignedCategories(productViewModel, product.Categories);
-            if (!string.IsNullOrEmpty(product.ImageName))
+            if (!string.IsNullOrEmpty(productViewModel.ImageName))
             {
                 productViewModel.ImagePath = _storageService.GetImagePath(productViewModel.ImageName);
             }
@@ -164,24 +142,12 @@ namespace ProductCatalogueApp.Controllers
             {
                 try
                 {
-                    var productToUpdate = await _productsService.GetProductWithCategories(id);
-
-                    productToUpdate.Name = productCategoriesViewModel.Name;
-                    productToUpdate.SKU = productCategoriesViewModel.SKU;
-
-                    if (file != null && file.FileName.CompareTo(productToUpdate.ImageName) != 0)
+                    if (file != null)
                     {
-                        productToUpdate.ImageName = file.FileName;
                         await _storageService.DeleteImageFromStorage(file);
                         await _storageService.UploadImageToStorage(file);
                     }
-
-                    UpdateDateUserModified(productToUpdate);
-
-                    _productsService.UpdateProductCategories(productToUpdate, selectedCategories);
-                    PopulateAssignedCategories(productCategoriesViewModel, productToUpdate.Categories);
-
-                    await _productsService.UpdateProduct(productToUpdate);
+                    await _productsService.UpdateProduct(productCategoriesViewModel, file == null ? "": file.FileName, selectedCategories);
                 }
                 catch (DbUpdateConcurrencyException)
                 {
@@ -221,13 +187,7 @@ namespace ProductCatalogueApp.Controllers
         [Authorize(Roles = "Admin")]
         public async Task<IActionResult> DeleteConfirmed(int id)
         {
-
-            var product = await _productsService.GetProductById(id);
-
-            UpdateDateUserModified(product);
-            product.IsActive = false;
-
-            await _productsService.UpdateProduct(product);
+            await _productsService.DeleteProduct(id, User.Identity.Name);
 
             return RedirectToAction(nameof(Index));
 
@@ -235,9 +195,9 @@ namespace ProductCatalogueApp.Controllers
 
 
         #region privateFunctions
-        private ICollection<AssignedProductCategory> FetchCategories()
+        private async Task<ICollection<AssignedProductCategory>> FetchCategories()
         {
-            var categories = _categoriesService.GetAllCategories();
+            var categories = await _categoriesService.GetAllCategoriesList();
             var assignedCategories = new List<AssignedProductCategory>();
 
             foreach (var item in categories)
@@ -251,42 +211,6 @@ namespace ProductCatalogueApp.Controllers
             }
 
             return assignedCategories;
-        }
-
-
-        private void AddCategoriesToProduct(Product product, string[] categories)
-        {
-            if (categories == null) return;
-
-            foreach (var item in categories)
-            {
-                var category = new ProductCategory { ProductId = product.ID, CategoryId = int.Parse(item) };
-                product.Categories.Add(category);
-            }
-        }
-
-        private void PopulateAssignedCategories(ProductCategoriesViewModel productViewModel, ICollection<ProductCategory> productCategories)
-        {
-            var allCategories = _categoriesService.GetAllCategories();
-            var categories = productCategories.Select(x => x.CategoryId).ToList();
-            var assignViewModel = new List<AssignedProductCategory>();
-            foreach (var category in allCategories)
-            {
-                assignViewModel.Add(new AssignedProductCategory
-                {
-                    CategoryID = category.ID,
-                    CategoryName = category.Name,
-                    Assigned = categories.Contains(category.ID)
-                });
-            }
-
-            productViewModel.Categories = assignViewModel;
-        }
-
-        private void UpdateDateUserModified(Product product)
-        {
-            product.DateModified = DateTime.Now;
-            product.UserCreated = User.Identity.Name;
         }
     }
     #endregion

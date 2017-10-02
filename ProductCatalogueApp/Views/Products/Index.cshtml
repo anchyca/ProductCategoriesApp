@@ -1,4 +1,4 @@
-﻿@model ProductCatalogueModels.PaginatedList<ProductCatalogueModels.Product>
+﻿@model ProductCatalogueModels.PaginatedList<ProductCatalogueAppDb.ViewModels.ProductCategoriesViewModel>
 @{
     ViewData["Title"] = "Products";
 }
@@ -57,7 +57,7 @@
                 <td>
                     @foreach(var category in item.Categories)
                     {
-                        @:<text>@category.Category.Name</text><br />
+                        @:<text>@category.CategoryName</text><br />
                     }
                 </td>
                 <td>
@@ -65,16 +65,16 @@
                     {
                         if (User.IsInRole("Admin"))
                         {
-                            <a asp-action="Edit" asp-route-id="@item.ID">Uredi</a> <text>|</text>
+                            <a asp-action="Edit" asp-route-id="@item.ProductID">Uredi</a> <text>|</text>
                         }
                     }
-                    <a asp-action="Details" asp-route-id="@item.ID">Detalji</a>
+                    <a asp-action="Details" asp-route-id="@item.ProductID">Detalji</a>
                     @if (User.Identity.IsAuthenticated)
                     {
                         if (User.IsInRole("Admin"))
                         {
                             <text>|</text>
-                            <a asp-action="Delete" asp-route-id="@item.ID">Deaktiviraj</a>
+                            <a asp-action="Delete" asp-route-id="@item.ProductID">Deaktiviraj</a>
                         }
                     }
                 </td>

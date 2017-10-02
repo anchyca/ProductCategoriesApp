@@ -1,27 +1,22 @@
-﻿using System;
-using System.Linq;
-using System.Threading.Tasks;
+﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
-using ProductCatalogueApp.Data;
-using Microsoft.AspNetCore.Authorization;
-using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
 using ProductCatalogueAppDb.ServiceInterfaces;
-using ProductCatalogueModels;
+using ProductCatalogueAppDb.ViewModels;
+using System.Threading.Tasks;
 
 namespace ProductCatalogueApp.Controllers
 {
     public class CategoriesController : Controller
     {
-        private readonly ApplicationDbContext _context;
         private readonly ILogger _logger;
         private readonly IConfiguration _configuration;
         private readonly ICategoriesService _categoriesService;
 
-        public CategoriesController(ApplicationDbContext context, ILogger<CategoriesController> logger, IConfiguration configuration, ICategoriesService categoriesService)
+        public CategoriesController(ILogger<CategoriesController> logger, IConfiguration configuration, ICategoriesService categoriesService)
         {
-            _context = context;
             _logger = logger;
             _configuration = configuration;
             _categoriesService = categoriesService;
@@ -63,16 +58,11 @@ namespace ProductCatalogueApp.Controllers
         [HttpPost]
         [ValidateAntiForgeryToken]
         [Authorize(Roles = "Admin")]
-        public async Task<IActionResult> Create([Bind("ID,Name")] Category category)
+        public async Task<IActionResult> Create([Bind("ID,Name")] CategoryViewModel category)
         {
             if (ModelState.IsValid)
             {
-                category.DateCreated = DateTime.Now;
-                category.UserCreated = User.Identity.Name;
-                category.DateModified = DateTime.Now;
-                category.UserModified = User.Identity.Name;
-
-                await _categoriesService.CreateCategory(category);
+                await _categoriesService.CreateCategory(category, User.Identity.Name);
 
                 return RedirectToAction(nameof(Index));
             }
@@ -102,7 +92,7 @@ namespace ProductCatalogueApp.Controllers
         [HttpPost]
         [ValidateAntiForgeryToken]
         [Authorize(Roles = "Admin")]
-        public async Task<IActionResult> Edit(int id, [Bind("ID,Name")] Category category)
+        public async Task<IActionResult> Edit(int id, [Bind("ID,Name")] CategoryViewModel category)
         {
             if (id != category.ID)
             {
@@ -113,9 +103,7 @@ namespace ProductCatalogueApp.Controllers
             {
                 try
                 {
-                    category.DateModified = DateTime.Now;
-                    category.UserModified = User.Identity.Name;
-                    await _categoriesService.UpdateCategory(category);
+                    await _categoriesService.UpdateCategory(category, User.Identity.Name);
                 }
                 catch (DbUpdateConcurrencyException)
                 {
@@ -155,10 +143,8 @@ namespace ProductCatalogueApp.Controllers
         [Authorize(Roles = "Admin")]
         public async Task<IActionResult> DeleteConfirmed(int id)
         {
-
             await _categoriesService.DeleteCategory(id);
             return RedirectToAction(nameof(Index));
-
         }
     }
 }

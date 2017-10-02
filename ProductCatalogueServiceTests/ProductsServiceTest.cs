@@ -3,6 +3,7 @@ using Microsoft.VisualStudio.TestTools.UnitTesting;
 using ProductCatalogueAppDb;
 using ProductCatalogueAppDb.ServiceImplementations;
 using ProductCatalogueAppDb.ServiceInterfaces;
+using ProductCatalogueAppDb.ViewModels;
 using ProductCatalogueModels;
 using System;
 using System.Collections.Generic;
@@ -27,7 +28,7 @@ namespace ProductCatalogueServiceTests
         [TestMethod]
         public async Task TestGetProductByIdProductExists()
         {
-            Product product = await productsService.GetProductById(1);
+            ProductViewModel product = await productsService.GetProductById(1);
 
             Assert.IsNotNull(product);
         }
@@ -35,7 +36,7 @@ namespace ProductCatalogueServiceTests
         [TestMethod]
         public async Task TestGetProductByIdCorrectData()
         {
-            Product product = await productsService.GetProductById(1);
+            ProductViewModel product = await productsService.GetProductById(1);
 
             Assert.IsTrue(product.SKU == "1234");
         }
@@ -44,8 +45,8 @@ namespace ProductCatalogueServiceTests
         public async Task TestCreateProduct()
         {
             var products = await productsService.GetProductsByFilter("", "");
-            products = products.OrderBy(x => x.ID);
-            int id = products.Last().ID + 1;
+            products = products.OrderBy(x => x.ProductID);
+            int id = products.Last().ProductID + 1;
 
             Product product = new Product
             {
@@ -72,8 +73,9 @@ namespace ProductCatalogueServiceTests
         [TestMethod]
         public async Task TestUpdateProduct()
         {
-            Product product = await productsService.GetProductById(2);
+            ProductViewModel productViewModel = await productsService.GetProductById(2);
             string newSku = "New sku " + DateTime.Now.ToString();
+            Product product = productViewModel.ToModel();
             product.SKU = newSku;
             product.DateModified = DateTime.Now;
 
@@ -94,22 +96,24 @@ namespace ProductCatalogueServiceTests
         public async Task TestRemoveAllCategories()
         {
             // product with id 1 has 2 categories
-            Product product = await productsService.GetProductById(1);
+            ProductViewModel product = await productsService.GetProductById(1);
 
-            productsService.UpdateProductCategories(product, null);
+            var productModel = product.ToModel();
+            productsService.UpdateProductCategories(productModel, null);
 
-            Assert.IsTrue(product.Categories.Count == 0);
+            Assert.IsTrue(productModel.Categories.Count == 0);
         }
 
         [TestMethod]
         public async Task TestAddCategory()
         {
             // product with id 1 has 2 categories
-            Product product = await productsService.GetProductById(5);
+            ProductViewModel product = await productsService.GetProductById(5);
 
-            productsService.UpdateProductCategories(product, new string[] { "1" });
+            var productModel = product.ToModel();
+            productsService.UpdateProductCategories(productModel, new string[] { "1" });
 
-            Assert.IsTrue(product.Categories.Count == 1);
+            Assert.IsTrue(productModel.Categories.Count == 1);
         }
 
         private ProductCatalogueDbContext GetDbContext()

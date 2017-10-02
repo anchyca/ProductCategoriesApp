@@ -6,7 +6,7 @@ using System.ComponentModel;
 using System.Linq;
 using System.Threading.Tasks;
 
-namespace ProductCatalogueApp.Models.ProductViewModels
+namespace ProductCatalogueAppDb.ViewModels
 {
     public class ProductCategoriesViewModel
     {
@@ -24,6 +24,7 @@ namespace ProductCatalogueApp.Models.ProductViewModels
         public string ImagePath { get; set; }
         [DisplayName("Slika")]
         public IFormFile Image { get; set; }
+        [DisplayName("Kategorije")]
         public virtual ICollection<AssignedProductCategory> Categories { get; set; }
     }
 }

@@ -6,6 +6,7 @@ using ProductCatalogueModels;
 using Microsoft.EntityFrameworkCore;
 using System.Threading.Tasks;
 using System.Linq;
+using ProductCatalogueAppDb.ViewModels;
 
 namespace ProductCatalogueAppDb.ServiceImplementations
 {
@@ -17,32 +18,34 @@ namespace ProductCatalogueAppDb.ServiceImplementations
         {
             _context = context;
         }
-        public DbSet<Category> GetAllCategories()
+
+        public async Task<List<CategoryViewModel>> GetAllCategoriesList()
         {
-            return _context.Category;
+            var categories = await _context.Category.ToListAsync();
+            return categories.ToViewModels();
         }
 
-        public async Task<List<Category>> GetAllCategoriesList()
-        {
-            return await _context.Category.ToListAsync();
-        }
-
-        public async Task<Category> GetCategoryById(int id)
+        public async Task<CategoryViewModel> GetCategoryById(int id)
         {
             var category = await _context.Category
                 .SingleOrDefaultAsync(m => m.ID == id);
-            return category;
+            return category.ToViewModel();
         }
 
-        public async Task CreateCategory(Category category)
+        public async Task CreateCategory(CategoryViewModel category, string userName)
         {
-            _context.Add(category);
+            var categoryToAdd = category.ToModel(userName);
+            categoryToAdd.UserCreated = userName;
+            categoryToAdd.DateCreated = DateTime.Now;
+
+            _context.Add(categoryToAdd);
             await _context.SaveChangesAsync();
         }
 
-        public async Task UpdateCategory(Category category)
+        public async Task UpdateCategory(CategoryViewModel category, string userName)
         {
-            _context.Update(category);
+            var categoryDb = category.ToModel(userName);
+            _context.Update(categoryDb);
             await _context.SaveChangesAsync();
         }
 
@@ -58,7 +61,7 @@ namespace ProductCatalogueAppDb.ServiceImplementations
             return await _context.Category.AnyAsync(e => e.ID == id);
         }
 
-        public async Task<List<Category>> GetCategoriesPageByFilter(string searchString, int page, int pageSize)
+        public async Task<List<CategoryViewModel>> GetCategoriesPageByFilter(string searchString, int page, int pageSize)
         {
             var categories = _context.Category.Select(x => x);
 
@@ -73,7 +76,9 @@ namespace ProductCatalogueAppDb.ServiceImplementations
                     .Where(x => x.Name.Contains(searchString));
             }
 
-            return await categories.Skip((page - 1) * pageSize).Take(pageSize).ToListAsync();
+            var categoriesPage = await categories.Skip((page - 1) * pageSize).Take(pageSize).ToListAsync();
+
+            return categoriesPage.ToViewModels();
         }
     }
 }

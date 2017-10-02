@@ -4,6 +4,8 @@ using ProductCatalogueModels;
 using Microsoft.EntityFrameworkCore;
 using System.Linq;
 using System.Threading.Tasks;
+using ProductCatalogueAppDb.ViewModels;
+using System;
 
 namespace ProductCatalogueAppDb.ServiceImplementations
 {
@@ -16,14 +18,14 @@ namespace ProductCatalogueAppDb.ServiceImplementations
             _context = context;
         }        
 
-        public async Task<List<Product>> GetProductsPageByFilter(string currentFilter, string searchString, int page, int pageSize)
+        public async Task<List<ProductCategoriesViewModel>> GetProductsPageByFilter(string currentFilter, string searchString, int page, int pageSize)
         {
             var products = await GetProductsByFilter(currentFilter, searchString);
 
             return await products.Skip((page - 1) * pageSize).Take(pageSize).ToListAsync();
         }
 
-        public async Task<IQueryable<Product>> GetProductsByFilter(string currentFilter, string searchString)
+        public async Task<IQueryable<ProductCategoriesViewModel>> GetProductsByFilter(string currentFilter, string searchString)
         {
             var products = _context.Product
                        .Include(x => x.Categories)
@@ -46,35 +48,60 @@ namespace ProductCatalogueAppDb.ServiceImplementations
                             (x.SKU.Contains(searchString) || x.Name.Contains(searchString) || productIds.Contains(x.ID)));
             }
 
-            return products.AsNoTracking();
+            var productViewModels = products.AsNoTracking().ToList().ToProductViewModels();
+
+            return productViewModels.AsQueryable().AsNoTracking();
         }
 
-        public async Task<Product> GetProductById(int id)
+        public async Task<ProductViewModel> GetProductById(int id)
         {
             var product = await _context.Product
                     .SingleOrDefaultAsync(m => m.ID == id);
 
-            return product;
+            return product.ToViewModel();
         }
 
-        public async Task CreateProduct(Product product)
+        public async Task CreateProduct(ProductCategoriesViewModel productCategoriesViewModel, string userName, string[] selectedCategories)
         {
+            
+            var product = productCategoriesViewModel.ToProductModel();
+
+            product.DateCreated = DateTime.Now;
+            product.UserCreated = userName;
+            product.DateModified = DateTime.Now;
+            product.UserModified = userName;
+
+            AddCategoriesToProduct(product, selectedCategories);
+
             _context.Add(product);
             await _context.SaveChangesAsync();
         }
 
-        public async Task<Product> GetProductWithCategories(int id)
+        public async Task<ProductCategoriesViewModel> GetProductWithCategories(int id)
         {
             var product = await _context.Product
                        .Include(x => x.Categories)
                        .SingleOrDefaultAsync(m => m.ID == id);
+            var productViewModel = product.ToProductViewModel();
+            await PopulateAssignedCategories(productViewModel, product.Categories);
 
-            return product;
+            return productViewModel;
         }
 
-        public async Task UpdateProduct(Product product)
+        public async Task UpdateProduct(ProductCategoriesViewModel productCategoriesViewModel, string fileName, string[] selectedCategories)
         {
-            _context.Update(product);
+            var productToUpdate = await _context.Product.Where(x => x.ID == productCategoriesViewModel.ProductID)
+                .Include(x => x.Categories).SingleOrDefaultAsync();
+
+            productToUpdate.Name = productCategoriesViewModel.Name;
+            productToUpdate.SKU = productCategoriesViewModel.SKU;
+
+            productToUpdate.ImageName = fileName;
+
+            UpdateProductCategories(productToUpdate, selectedCategories);
+            await PopulateAssignedCategories(productCategoriesViewModel, productToUpdate.Categories);
+
+            _context.Update(productToUpdate);
             await _context.SaveChangesAsync();
         }
 
@@ -125,6 +152,49 @@ namespace ProductCatalogueAppDb.ServiceImplementations
                                     .ThenInclude(x => x.Category)
                                 .Where(x => x.Categories.Select(y => y.CategoryId).Contains(categoryId)).ToListAsync();
             return products;
+        }
+
+        public async Task DeleteProduct(int id, string userName)
+        {
+            var product = await _context.Product.Where(x => x.ID == id).FirstOrDefaultAsync();
+            if (product != null)
+            {
+                product.IsActive = false;
+                product.DateModified = DateTime.Now;
+                product.UserModified = userName;
+                _context.Update(product);
+                await _context.SaveChangesAsync();
+            }
+        }
+
+        private void AddCategoriesToProduct(Product product, string[] categories)
+        {
+            if (categories == null) return;
+
+            foreach (var item in categories)
+            {
+                var category = new ProductCategory { ProductId = product.ID, CategoryId = int.Parse(item) };
+                product.Categories.Add(category);
+            }
+        }
+
+        private async Task PopulateAssignedCategories(ProductCategoriesViewModel productViewModel, ICollection<ProductCategory> productCategories)
+        {
+            var categoriyList = await _context.Category.ToListAsync();
+            var allCategories = categoriyList.ToViewModels();
+            var categories = productCategories.Select(x => x.CategoryId).ToList();
+            var assignViewModel = new List<AssignedProductCategory>();
+            foreach (var category in allCategories)
+            {
+                assignViewModel.Add(new AssignedProductCategory
+                {
+                    CategoryID = category.ID,
+                    CategoryName = category.Name,
+                    Assigned = categories.Contains(category.ID)
+                });
+            }
+
+            productViewModel.Categories = assignViewModel;
         }
     }
 }

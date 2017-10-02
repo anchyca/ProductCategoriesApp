@@ -1,4 +1,5 @@
 ﻿using Microsoft.EntityFrameworkCore;
+using ProductCatalogueAppDb.ViewModels;
 using ProductCatalogueModels;
 using System;
 using System.Collections.Generic;
@@ -9,13 +10,12 @@ namespace ProductCatalogueAppDb.ServiceInterfaces
 {
     public interface ICategoriesService
     {
-        DbSet<Category> GetAllCategories();
-        Task<List<Category>> GetAllCategoriesList();
-        Task<Category> GetCategoryById(int id);
-        Task CreateCategory(Category category);
-        Task UpdateCategory(Category category);
+        Task<List<CategoryViewModel>> GetAllCategoriesList();
+        Task<CategoryViewModel> GetCategoryById(int id);
+        Task CreateCategory(CategoryViewModel category, string userName);
+        Task UpdateCategory(CategoryViewModel category, string userName);
         Task DeleteCategory(int categoryID);
         Task<bool> CategoryExists(int id);
-        Task<List<Category>> GetCategoriesPageByFilter(string searchString, int page, int pageSize);
+        Task<List<CategoryViewModel>> GetCategoriesPageByFilter(string searchString, int page, int pageSize);
     }
 }
