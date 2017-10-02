@@ -163,7 +163,7 @@ namespace ProductCatalogueApp.Controllers
                     productToUpdate.Name = productCategoriesViewModel.Name;
                     productToUpdate.SKU = productCategoriesViewModel.SKU;
 
-                    if (file.FileName.CompareTo(productToUpdate.ImageName) != 0)
+                    if (file != null && file.FileName.CompareTo(productToUpdate.ImageName) != 0)
                     {
                         productToUpdate.ImageName = file.FileName;
                         await _storageService.DeleteImageFromStorage(file);
