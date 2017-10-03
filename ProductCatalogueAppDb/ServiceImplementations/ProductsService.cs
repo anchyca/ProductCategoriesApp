@@ -145,13 +145,13 @@ namespace ProductCatalogueAppDb.ServiceImplementations
             }
         }
 
-        public async Task<List<Product>> GetProductByCategory(int categoryId)
+        public async Task<List<ProductViewModel>> GetProductByCategory(int categoryId)
         {
             var products = await _context.Product
                                 .Include(x => x.Categories)
                                     .ThenInclude(x => x.Category)
                                 .Where(x => x.Categories.Select(y => y.CategoryId).Contains(categoryId)).ToListAsync();
-            return products;
+            return products.ToViewModels();
         }
 
         public async Task DeleteProduct(int id, string userName)

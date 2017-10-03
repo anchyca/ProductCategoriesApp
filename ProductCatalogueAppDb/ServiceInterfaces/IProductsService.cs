@@ -17,7 +17,7 @@ namespace ProductCatalogueAppDb.ServiceInterfaces
         Task UpdateProduct(ProductCategoriesViewModel productCategoriesViewModel, string fileName, string[] selectedCategories);
         Task<bool> ProductExists(int id);
         void UpdateProductCategories(Product product, string[] selectedCategories);
-        Task<List<Product>> GetProductByCategory(int categoryId);
+        Task<List<ProductViewModel>> GetProductByCategory(int categoryId);
         Task DeleteProduct(int id, string userName);
     }
 }

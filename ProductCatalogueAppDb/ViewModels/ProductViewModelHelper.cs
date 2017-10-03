@@ -70,6 +70,18 @@ namespace ProductCatalogueAppDb.ViewModels
             return model;
         }
 
+        public static List<ProductViewModel> ToViewModels(this List<Product> products)
+        {
+            List<ProductViewModel> viewModels = new List<ProductViewModel>();
+
+            foreach (var product in products)
+            {
+                viewModels.Add(product.ToViewModel());
+            }
+
+            return viewModels;
+        }
+
         public static Product ToModel(this ProductViewModel productViewModel)
         {
             Product product = new Product

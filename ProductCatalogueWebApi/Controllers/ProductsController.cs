@@ -10,6 +10,7 @@ using Microsoft.Extensions.Configuration;
 using ProductCatalogueAppDb;
 using ProductCatalogueAppDb.ServiceInterfaces;
 using Microsoft.Extensions.Options;
+using ProductCatalogueAppDb.ViewModels;
 
 // For more information on enabling Web API for empty projects, visit https://go.microsoft.com/fwlink/?LinkID=397860
 
@@ -55,7 +56,7 @@ namespace ProductCatalogueWebApi.Controllers
 
         //[HttpGet("{categoryId}")]
         [Route("GetByCategory/{categoryId}")]
-        public async Task<IEnumerable<Product>> GetProductByCategory(int categoryId)
+        public async Task<IEnumerable<ProductViewModel>> GetProductByCategory(int categoryId)
         {
             try
             {
