@@ -48,16 +48,14 @@ namespace ProductCatalogueServiceTests
             products = products.OrderBy(x => x.ProductID);
             int id = products.Last().ProductID + 1;
 
-            Product product = new Product
+            ProductCategoriesViewModel product = new ProductCategoriesViewModel
             {
-                ID = id,
+                ProductID = id,
                 SKU = "1235",
-                Name = "just created " + id,
-                DateCreated = DateTime.Now,
-                IsActive = true
+                Name = "just created " + id
             };
 
-            await productsService.CreateProduct(product);
+            await productsService.CreateProduct(product, "user", null);
 
             var prod = await productsService.GetProductById(id);
             Assert.IsNotNull(prod);
@@ -66,7 +64,7 @@ namespace ProductCatalogueServiceTests
         [TestMethod]
         public async Task TestGetProductWithCategories()
         {
-            Product product = await productsService.GetProductWithCategories(1);
+            ProductCategoriesViewModel product = await productsService.GetProductWithCategories(1);
             Assert.IsTrue(product.Categories.Count() > 0);
         }
 
@@ -79,7 +77,7 @@ namespace ProductCatalogueServiceTests
             product.SKU = newSku;
             product.DateModified = DateTime.Now;
 
-            await productsService.UpdateProduct(product);
+            await productsService.UpdateProduct(product.ToProductViewModel(), "", null);
 
             var prod = await productsService.GetProductById(2);
             Assert.IsTrue(prod.SKU == newSku);
